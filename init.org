@@ -1,0 +1,685 @@
+#+TITLE: Emacs init.el
+#+AUTHOR: Blake Smith
+#+PROPERTY: header-args :tangle yes :results silent
+
+****** TODO should probably spell check this shit
+       
+* Emacs Configuration
+** Intro Blurb
+  <2022-04-12 Tue>
+
+  This is a [[https://leanpub.com/lit-config/read][literate]] configuration file for Emacs. I've done some
+  mucking about with [[https://github.com/hlissner/doom-emacs][Doom Emacs]], as well as [[https://www.spacemacs.org/][spacemacs]]. They are both
+  excellent projects, but I found myself overwhelmed with the sheer
+  variety of functionality. It was difficult to tell what behaviour
+  was coming from which packages and adding new configuration was
+
+  difficult to understand what exactly is happening under the hood,
+  especially with Emacs already having so much functionality to begin
+  with.
+
+  So.. here I am with a fresh `pacman -S emacs` install. My hope is
+  that adding in packages and configuration incrementally will help me
+  to understand Emacs, and elisp, and foster a solid command over the
+  editor and environment.
+
+** Packages
+*** Melpa
+
+    [[https://melpa.org/#/][MELPA]] (Milkypostman’s Emacs Lisp Package Archive) is an additional package archive for Emacs, alongside [[https://www.emacswiki.org/emacs/ELPA#GnuELPA][GnuELPA]].
+
+    + ELPA :: Emacs Lisp Package Archive
+
+    #+begin_src elisp
+      (require 'package)
+      (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+      (package-initialize)
+    #+end_src
+
+*** Use Package
+
+    [[https://github.com/jwiegley/use-package][use-package]] seems to be the way to go as far as installing and
+    configuring packages individually. It's a macro that makes
+    installation of packages, setting of variables, changing keymaps,
+    and other configuration a little more tidy.
+
+    The TLDR;
+
+    + :init :: run code *before* loading the package
+    + :config :: run code *after* loading the package
+    + :bind :: bind keys to commands from the package
+    + :bind-keymap :: special bind for keymaps, since keymaps aren't functions
+    + :hook :: add a hook
+    + :custom :: customize variables
+    + :ensure t :: makes sure the package has been installed
+
+    There's more that that but that's a sample.
+
+    #+begin_src elisp
+    (unless (package-installed-p 'use-package)
+      (package-refresh-contents)
+      (package-install 'use-package))
+    #+end_src
+
+** Languages
+*** Markup + Data
+
+   #+begin_src elisp
+     (use-package json-mode :ensure t)
+     (use-package yaml-mode :ensure t)
+     (use-package csv-mode :ensure t)
+   #+end_src
+
+*** Company Mode
+
+    Company (complete any) is a completion framework for Emacs.
+
+    #+begin_src elisp
+      (use-package company
+        :ensure t
+        :config
+        (add-hook 'after-init-hook 'global-company-mode)
+        (setq company-idle-delay 0)
+        (setq company-minimum-prefix-length 1))
+    #+end_src
+
+*** Web Stuff
+**** HTML
+
+     #+begin_src elisp
+       (use-package emmet-mode
+         :ensure t
+         :config
+         (add-hook 'sgml-mode-hook 'emmet-mode)
+         (add-hook 'css-mode-hook 'emmet-mode))
+     #+end_src
+
+**** Javascript
+***** RJSX
+
+      #+begin_src elisp
+        (use-package js2-mode
+          :ensure t
+          :mode "\\.js\\'")
+      #+end_src
+
+***** Tide
+
+      #+begin_src elisp
+        (defun setup-tide-mode ()
+          (interactive)
+          ;;  (setq tide-tsserver-process-environment '("TSS_LOG=-level verbose -file /tmp/tss.log"))
+          (tide-setup)
+          (if (file-exists-p (concat tide-project-root "node_modules/typescript/bin/tsserver"))
+            (setq tide-tsserver-executable "node_modules/typescript/bin/tsserver"))
+          (flycheck-mode +1)
+          (setq flycheck-check-syntax-automatically '(save mode-enabled))
+          (eldoc-mode +1)
+          (tide-hl-identifier-mode +1)
+          (setq tide-format-options '(:indentSize 2 :tabSize 2 :insertSpaceAfterFunctionKeywordForAnonymousFunctions t :placeOpenBraceOnNewLineForFunctions nil))
+          (local-set-key (kbd "C-c d") 'tide-documentation-at-point)
+          (company-mode +1)
+          (setq company-minimum-prefix-length 1))
+
+        (use-package tide
+          :ensure t
+          :config
+          (progn
+            (company-mode +1)
+            ;; aligns annotation to the right hand side
+            (setq company-tooltip-align-annotations t)
+            (add-hook 'typescript-mode-hook #'setup-tide-mode)
+            (add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-mode))))
+
+        ;; use web-mode + tide-mode for javascript instead
+        (use-package js2-mode
+          :ensure t
+          :config
+          (progn
+            (add-hook 'js2-mode-hook #'setup-tide-mode)
+            ;; configure javascript-tide checker to run after your default javascript checker
+            (setq js2-basic-offset 2)
+            (flycheck-add-next-checker 'javascript-eslint 'javascript-tide 'append)
+            (add-to-list 'interpreter-mode-alist '("node" . js2-mode))
+            (add-to-list 'auto-mode-alist '("\\.js\\'" . js2-mode))))
+
+        ;; (add-to-list 'interpreter-mode-alist '("node" . js2-mode))
+
+        (use-package json-mode
+          :ensure t
+          :config
+          (progn
+            (flycheck-add-mode 'json-jsonlint 'json-mode)
+            (add-hook 'json-mode-hook 'flycheck-mode)
+            (setq js-indent-level 2)
+            (add-to-list 'auto-mode-alist '("\\.json" . json-mode))))
+
+        (use-package web-mode
+          :ensure t
+          :config
+          (progn
+            (add-to-list 'auto-mode-alist '("\\.tsx\\'" . web-mode))
+            (add-to-list 'auto-mode-alist '("\\.js"     . web-mode))
+            (add-to-list 'auto-mode-alist '("\\.html"   . web-mode))
+            ;; this magic incantation fixes highlighting of jsx syntax in .js files
+            (setq web-mode-content-types-alist
+                  '(("jsx" . "\\.js[x]?\\'")))
+            (add-hook 'web-mode-hook
+                      (lambda ()
+                        (setq web-mode-code-indent-offset 2)
+                        (when (string-equal "tsx" (file-name-extension buffer-file-name))
+                          (setup-tide-mode))
+                        (when (string-equal "jsx" (file-name-extension buffer-file-name))
+                          (setup-tide-mode))
+                        (when (string-equal "js" (file-name-extension buffer-file-name))
+                          (progn
+                            (setup-tide-mode)
+                            (with-eval-after-load 'flycheck
+                              (flycheck-add-mode 'typescript-tslint 'web-mode)
+                              (flycheck-add-mode 'javascript-tide 'web-mode))))))))
+      #+end_src
+
+***** Prettier
+
+      #+begin_src elisp
+        (use-package prettier-js
+          :ensure t
+          :after (rjsx-mode)
+          :hook (rjsx-mode . prettier-js-mode))
+      #+end_src
+     
+** Fancy Pants Undo Tree
+   
+   The `undo-tree` package allows you to visually go through the
+   undo-redo history. It even shows the diff between each change. I
+   bind it to `C-x /`.
+
+   #+begin_src elisp
+     (use-package undo-tree
+       :ensure t
+       :bind (("C-x /" . undo-tree-visualize))
+       :config
+       (unbind-key "C-b" undo-tree-visualizer-mode-map)
+       (global-undo-tree-mode t)
+       :custom
+       (undo-tree-visualizer-diff t)
+       (undo-tree-visualizer-timestamps t)
+       (undo-tree-visualizer-relative t))
+   #+end_src
+   
+** EVIL Mode
+
+   I've been a vimmer for years, if not for evil mode I definitely
+   would not be using Emacs. Sorry to all of the Emacs traditionalists
+   out there!
+
+   #+begin_src elisp
+     (use-package evil
+       :ensure t
+       :init
+       (setq evil-search-module 'evil-search)
+       (setq evil-ex-complete-emacs-commands nil)
+       (setq evil-vsplit-window-right t)
+       (setq evil-split-window-below t)
+       (setq evil-shift-round nil)
+       (setq evil-want-fine-undo t)
+       (setq evil-want-keybinding nil) ;; required for evil-collection
+       :config
+       (evil-set-undo-system 'undo-tree)
+       (evil-mode 1))
+
+       ;; Example of how to map a evil normal mode command
+       ;; (define-key evil-normal-state-map (kbd ", w") 'evil-window-vsplit))
+
+     ;; Adds compatibility with Magit and other things
+     (use-package evil-collection
+       :ensure t
+       :config
+       (evil-collection-init))
+
+
+     ;; Surround
+     (use-package evil-surround
+       :ensure t
+       :config
+       (global-evil-surround-mode 1))
+
+
+     ;; Org Agenda
+     (use-package evil-org
+       :ensure t
+       :after org
+       :hook (org-mode . (lambda () evil-org-mode))
+       :config
+       (require 'evil-org-agenda)
+       (evil-org-agenda-set-keys))
+   #+end_src
+
+   
+*** TODO [[https://github.com/noctuid/evil-guide][Evil Guide]]
+
+    There is an in depth guide about configuring evil mode, worth having a look.
+
+** Match Brackets
+
+   Automatically insert closing brackets
+
+   #+begin_src elisp
+   (electric-pair-mode 1)
+   #+end_src
+** Org Mode <3
+*** Org-Capture
+
+    #+begin_src elisp
+      (use-package org
+        :config
+        ;; add a src block with C-c C-, s
+        (add-to-list 'org-structure-template-alist '("s" . "src"))
+        (global-set-key (kbd "C-c c") 'org-capture)
+        (setq org-default-notes-file "~/.notes.org")
+        (setq org-agenda-files '("~/.notes.org")))
+    #+end_src
+
+*** Org-Roam
+**** Install and Initial Config
+
+    #+begin_src elisp
+      (use-package org-roam
+	:ensure t
+	:bind (("C-c n l" . org-roam-buffer-toggle)
+	       ("C-c n f" . org-roam-node-find)
+	       ("C-c n i" . org-roam-node-insert)))
+    #+end_src
+
+**** Capture Templates
+
+    #+begin_src elisp
+        ;; Capture templates taken from https://jethrokuan.github.io/org-roam-guide/
+        (setq org-roam-capture-templates
+              '(("m" "main" plain "%?"
+                 :if-new (file+head "main/${slug}.org"
+                                    "#+title: ${title}\n")
+                 :immediate-finish t
+                 :unnarrowed t)
+                ("r" "reference" plain "%?"
+                 :if-new
+                 (file+head "reference/${title}.org" "#+title: ${title}\n")
+                 :immetiate-finish t
+                 :unnarrowed t)
+                ("a" "article" plain "%?"
+                 :if-new
+                 (file+head "articles/${title}.org"
+                            "#+title: ${title}\n#+filetags: :article:\ne")
+                 :immediate-finish t
+                 :unnarrowed t)))
+    #+end_src
+
+**** Include Node Type in Display Template
+
+    #+begin_src elisp
+        (setq org-roam-node-display-template
+              (concat "${type:15} ${title:*} " (propertize "${tags:10}" 'face 'org-tag)))
+    #+end_src
+
+**** Tag Nodes "draft" by Default
+
+     When a new note is created it should be tagged as draft. When it
+     is in a more complete state it can be re-tagged as an evergreen
+     note.
+
+     #+begin_src elisp
+       (defun me/tag-as-draft ()
+         (org-roam-tag-add '("draft")))
+
+       (add-hook 'org-roam-capture-new-node-hook #'me/tag-as-draft)
+     #+end_src
+
+**** Fancy Pants Obsidian Graph UI
+
+     #+begin_src elisp
+       (use-package org-roam-ui
+         :ensure t
+         :after org-roam
+         :hook (after-init . org-roam-ui-mode)
+         :config
+         (setq org-roam-ui-sync-theme t
+               org-roam-ui-follow t
+               org-roam-ui-update-on-save t
+               org-roam-ui-open-on-start t))
+     #+end_src
+*** Source Code Edit Window
+    `C-c '` will open a code block in a separate buffer. I would like
+    that buffer to be in the same window as the org file, essentially
+    "zooming into" the code block.
+
+    The other options are:
+    
+    | value              | description                                                                           |
+    |--------------------+---------------------------------------------------------------------------------------|
+    | plain              | Use ‘display-buffer’. Customize by changing ‘display-buffer-alist’ and its relatives. |
+    | current-window     | Use the current window.                                                               |
+    | split-window-below | New split below the current window.                                                   |
+    | split-window-right | New split to the right of the current window.                                         |
+    | other-window       | Uses `swtich-to-buffer-other-window`                                                  |
+    | reorganize-frame   | Replace the frame with two side by side windows, one of which is the new buffer       |
+
+    #+begin_src elisp
+      (require 'org)
+      (setq org-src-window-setup "current-window")
+    #+end_src
+** Git Wisardry
+
+   #+begin_src elisp
+     (use-package magit
+       :ensure t)
+   #+end_src
+
+*** Github Integration
+
+**** Issues
+
+     Nice functions for creating github issues within Emacs from [[https://moritz-breit.de/blog/2015/10/05/github-issues-in-emacs/][this post]].
+
+     To use it, make sure :GH-PROJECT: property is set in the org
+     file. Then you can run M-x gh-issue-create.
+
+     It also seems to require a top level heading, not sure why.
+
+     #+begin_src elisp
+       ;; We need ex-gfm for github-flavored-markdown export
+       (use-package ox-gfm
+          :ensure t)
+
+       (defun gh-issue-new-url (project title body)
+         (concat "https://github.com/"
+                 project
+                 "/issues/new?title="
+                 (url-hexify-string title)
+                 "&body="
+                 (url-hexify-string body)))
+
+       (defun gh-issue-new-browse (project title body)
+         (browse-url (gh-issue-new-url project title body)))
+
+       (defun gh-issue-get-project ()
+         (org-entry-get (point) "GH-PROJECT" t))
+
+       (defun gh-issue-create ()
+         (interactive)
+         (gh-issue-new-browse (gh-issue-get-project)
+                              (org-get-heading)
+                              (org-export-as 'gfm t)))
+     #+end_src
+
+** Helm
+
+   Helm provides incremental autocompleting.
+
+   #+begin_src elisp
+     (use-package counsel
+       :ensure t
+       :config
+       (ivy-mode 1)
+       (setq ivy-use-virtual-buffers t)
+       (setq ivy-count-format "(%d/%d) "))
+   #+end_src
+
+** Making Things Pretty
+**** Theme
+   Load the built in wombat theme.
+
+   #+begin_src elisp
+     (load-theme 'wombat)
+   #+end_src
+
+**** Line Highlighting
+
+     Highlight the current line.
+
+     #+begin_src elisp
+       (when window-system (add-hook 'prog-mode-hook 'hl-line-mode))
+     #+end_src
+
+**** Fancy Pants Ligatures
+
+     #+begin_src elisp
+       (when window-system
+         (use-package pretty-mode
+           :ensure t
+           :config
+           (global-pretty-mode t)))
+     #+end_src
+
+** Random Niceities 
+*** Some Sane Defaults
+
+    #+begin_src elisp
+      (setq-default
+       inhibit-startup-message t
+       visible-bell t
+       vc-follow-symlinks t
+       indent-tabs-mode nil
+       native-comp-async-report-warnings-errors nil)
+    #+end_src
+
+**** We Don't Need Bell Noises
+
+     #+begin_src elisp
+     (setq ring-bell-function 'ignore)
+     #+end_src
+
+** Async
+
+   Let's get some async processing going on.
+
+    #+begin_src elisp
+    (use-package async
+      :ensure t
+      :init (dired-async-mode 1))
+    #+end_src
+
+** EXWM
+*** Impressions Before Install
+
+   [[https://github.com/ch11ng/exwm][exwm]] is a the Emacs X Window Manager. This let's you straight up
+   use emacs as your window manager, with X windows like Emacs
+   buffers.  Genuinely, it looks like a major pain to get going
+   with. Often times the difficult things are the ones most worth
+   doing! Mainly, I've always wished I could just open the browser in
+   a vim-split and I think this is the closed I'll ever get to
+   that. As of <2022-04-12 Tue>, I jest there is a 40% chance that it
+   ends up working out for me. I will take those odds.
+
+*** TODO Follow Up
+    SCHEDULED: <2022-04-24 Sun>
+
+    Write something here about my experience so far with exwm.
+
+*** Are you sure you need to look at this??
+
+   #+begin_src elisp
+     (use-package exwm
+       :ensure t
+       :config
+         (require 'exwm-config)
+         (exwm-config-default) ;; we don't need to get fancy here
+         (setq exwm-workspace-number 3) ;; going with 3 only because I have 3 displays
+
+         ;; Uncle Dave said that this was the best way to set global keybinds
+         ;; The `s` in the keybinds is the Super key, if you aren't already hip to that
+         (exwm-input-set-key (kbd "s-r") #'exwm-reset)
+
+
+         ;; i3 style mod-n workspace switching, it also creates them so be careful with that
+         (dotimes (i 10)
+           (exwm-input-set-key (kbd (format "s-%d" i))
+                               `(lambda ()
+                                  (interactive)
+                                  (exwm-workspace-switch-create ,i))))
+
+
+
+         ;; this little bit will make sure that XF86 keys work in exwm buffers as well
+         (dolist (k '(XF86AudioLowerVolume
+                      XF86AudioRaiseVolume
+                      XF86PowerOff
+                      XF86AudioMute
+                      XF86AudioPlajy
+                      XF86AudioStop
+                      XF86AudioPrev
+                      XF86AudioNext
+                      XF86ScreenSaver
+                      XF68Back
+                      XF86Forward
+                      Scroll_Lock
+                      print
+                      ?\C-w
+                      ?\C-l ;; Some custom prefix keys as well
+                      ?\C-b
+                      ?\C-a))
+         (cl-pushnew k exwm-input-prefix-keys)))
+
+
+   #+end_src
+
+   If you want to hear straight from [[https://github.com/daedreth/UncleDavesEmacs][Uncle Dave]], this is just a rip-off version of what they did.
+
+   Also if you're wondering, [[https://emacs.stackexchange.com/questions/10938/what-is-the-difference-between-and-in-front-of-a-symbol][the `#'` in elisp is like `'` but for functions]].
+
+*** Audio keys would be nice
+
+    EXWM won't automatically map the
+    media keys. This is kind of
+    annoying, but opens up a world
+    of possibilities around mapping
+    the keys.
+
+    Here I use `pactl` to control
+    the audio and map the keys
+    manually.
+
+    #+begin_src elisp
+      (defun media/vol-up ()
+          (interactive)
+          (start-process-shell-command "volume-up" nil "pactl set-sink-volume @DEFAULT_SINK@ +10%"))
+
+      (defun media/vol-down ()
+          (interactive)
+          (start-process-shell-command "volume-down" nil "pactl set-sink-volume @DEFAULT_SINK@ -10%"))
+
+      (defun media/vol-set ()
+        (interactive)
+        (start-process "volume-set" nil "pactl" "set-sink-volume" "@DEFAULT_SINK@" (read-string "Set volume (%): ")))
+
+      (defun media/vol-mute ()
+        (interactive)
+        (start-process "volume-set" nil "pactl" "set-sink-volume" "0" "0%"))
+
+
+      (exwm-input-set-key (kbd "<XF86AudioRaiseVolume>") #'media/vol-up)
+      (exwm-input-set-key (kbd "<XF86AudioLowerVolume>") #'media/vol-down)
+      (exwm-input-set-key (kbd "<XF86AudioMute>") #'media/vol-mute)
+   #+end_src
+
+*** Zip Around Like It's i3wm 
+
+    #+begin_src elisp
+      (global-set-key (kbd "s-j") 'windmove-down)
+      (global-set-key (kbd "s-k") 'windmove-up)
+      (global-set-key (kbd "s-h") 'windmove-left)
+      (global-set-key (kbd "s-l") 'windmove-down)
+    #+end_src
+*** Support Window Resizing with the Mouse
+
+    Sometimes you just want to drag things..
+
+    #+begin_src elisp
+      ;; Allow resizing with mouse, of non-floating windows.
+      (setq window-divider-default-bottom-width 2
+	    window-divider-default-right-width 2)
+
+      (window-divider-mode)
+    #+end_src
+
+*** Multi Monitor Monkey Buisiness 
+
+    #+begin_src elisp
+      (require 'exwm-randr)
+      (exwm-randr-enable)
+
+      ;; This part's only going to work for my setup
+
+      (defun me/nicer-xrandr-nonsense (command)
+	(start-process-shell-command "xrandr" nil command))
+
+      (add-hook 'exwm-randr-screen-change-hook
+	    (lambda ()
+	      ;; script from arandr
+	      ;; I tried to move it to a separate file but then my WM exploded
+	      (me/nicer-xrandr-nonsense (concat
+					 "xrandr "
+					 "--output eDP-1 --primary --mode 1920x1200 --pos 1440x1952 --rotate normal "
+					 "--output DP-1 --off " ;; These --off lines might not matter
+					 "--output DP-2 --off " 
+					 "--output DP-3 --off "
+					 "--output DP-1-1 --off "
+					 "--output DP-1-2 --mode 2560x1440 --pos 1440x512 --rotate normal "
+					 "--output DP-1-3 --mode 2560x1440 --pos 0x0 --rotate left"))))
+
+      ;; Now we have to tell exwm which workspaces to put to each output
+      (setq exwm-randr-workspace-output-plist '(0 "eDP-1" 1 "DP-1-2" 2 "DP-1-3"))
+
+      ;; In case of laptop disconnection
+      (defun me/workspaces-lost-on-ghost-monitors ()
+	(setq exwm-randr-workspace-output-plist '(0 "eDP-1" 1 "eDP-1" 2 "eDP-1")))
+
+      ;; Lets have some nice keybinds as well
+      (global-set-key (kbd "s-b") #'exwm-workspace-switch-to-buffer)
+
+    #+end_src 
+
+*** Enable EXWM
+
+    Once all configuration for EXWM is done, enable it.
+
+    #+begin_src elisp
+      (exwm-enable)
+    #+end_src
+
+** We Need To Start Programs Sometimes
+*** We can use dmenu
+
+   #+begin_src elisp
+    (use-package dmenu
+     :ensure t
+     :bind
+       ("s-SPC" . 'dmenu))
+   #+end_src
+
+*** We can also map keys to whatever programs we want
+
+   #+begin_src elisp
+   (defun exwm-async-run (name)
+     (interactive)
+     (start-process name nil name))
+
+   ;; I had to do it.. don't worry I've got the theme set to high contrast
+   ;; Also using the vim plugin in vscode for maximum nonsense
+   (defun me/vscode-in-emacs ()
+     (interactive)
+     (exwm-async-run "code"))
+
+
+   (global-set-key (kbd "s-+") #'me/vscode-in-emacs)
+   #+end_src
+
+*** TODO Software to Make up For Desktop Environment Deficiency 
+** Better Buffer Killing
+
+   Use `ibuffer` instead of the regular buffer menu.
+
+   Allows deleting buffers with a simple "D y".
+   #+begin_src elisp
+     (global-set-key (kbd "C-x C-b") 'ibuffer)
+   #+end_src
+

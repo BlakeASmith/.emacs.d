@@ -1,0 +1,16 @@
+*~*~
+/auto-save-list/
+/bookmarks
+/bookmarks~
+/dmenu-items
+/elpa/
+*~
+/eshell/
+/exwm/
+/ido.last
+/org-roam.db
+/recentf
+/transient/
+/url/
+/.session*
+/.org-id-locations

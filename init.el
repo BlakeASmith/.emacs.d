@@ -162,32 +162,59 @@
   ;; add a src block with C-c C-, s
   (add-to-list 'org-structure-template-alist '("s" . "src"))
   (global-set-key (kbd "C-c c") 'org-capture)
-  (setq org-agenda-files '("~/.notes")))
+  (setq org-default-notes-file "~/.notes.org")
+  (setq org-agenda-files '("~/.notes.org")))
 
 (use-package org-roam
   :ensure t
   :bind (("C-c n l" . org-roam-buffer-toggle)
-	 ("C-c n f" . org-roam-node-find)
-	 ("C-c n i" . org-roam-node-insert)))
+         ("C-c n f" . org-roam-node-find)
+         ("C-c n i" . org-roam-node-insert)
+         ("C-c n c" . org-roam-capture))
+  :config
+  (org-roam-db-autosync-mode)jj)
 
 ;; Capture templates taken from https://jethrokuan.github.io/org-roam-guide/
 (setq org-roam-capture-templates
       '(("m" "main" plain "%?"
-         :if-new (file+head "main/${slug}.org"
-                            "#+title: ${title}\n")
-         :immediate-finish t
-         :unnarrowed t)
-        ("r" "reference" plain "%?"
-         :if-new
-         (file+head "reference/${title}.org" "#+title: ${title}\n")
-         :immetiate-finish t
-         :unnarrowed t)
-        ("a" "article" plain "%?"
-         :if-new
-         (file+head "articles/${title}.org"
-                    "#+title: ${title}\n#+filetags: :article:\ne")
-         :immediate-finish t
-         :unnarrowed t)))
+	 :if-new (file+head "main/${slug}.org"
+			    "#+title: ${title}\n")
+	 :immediate-finish t
+	 :unnarrowed t)
+	("r" "reference" plain "%?"
+	 :if-new
+	 (file+head "reference/${title}.org" "#+title: ${title}\n")
+	 :immetiate-finish t
+	 :unnarrowed t)
+	("i" "idea" plain "%?"
+	 :if-new
+	 (file+head "ideas/${title}.org" "#+title: ${title}\n#+filetags: :idea:\ne")
+	 :immetiate-finish t
+	 :unnarrowed t)
+	("t" "tag" plain "%?"
+	 :if-new
+	 (file+head "ideas/${title}.org" "#+title: ${title}\n#+filetags: :tag:\ne")
+	 :immetiate-finish t
+	 :unnarrowed t)
+	("a" "article" plain "%?"
+	 :if-new
+	 (file+head "articles/${title}.org"
+		    "#+title: ${title}\n#+filetags: :article:\ne")
+	 :immediate-finish t
+	 :unnarrowed t)))
+
+(require 'org-roam)
+(cl-defmethod org-roam-node-type ((node org-roam-node))
+  "Return the TYPE of NODE."
+  (condition-case nil
+      (file-name-nondirectory
+       (directory-file-name
+	(file-name-directory
+	 (file-relative-name (org-roam-node-file node) org-roam-directory))))
+    (error "")))
+
+
+(global-set-key (kbd "C-c n c") 'org-roam-capture)
 
 (setq org-roam-node-display-template
       (concat "${type:15} ${title:*} " (propertize "${tags:10}" 'face 'org-tag)))
@@ -393,3 +420,6 @@
 (global-set-key (kbd "s-+") #'me/vscode-in-emacs)
 
 (global-set-key (kbd "C-x C-b") 'ibuffer)
+
+(global-set-key (kbd "C-x c") 'compile)
+(global-set-key (kbd "C-x C-r") 'recompile)
